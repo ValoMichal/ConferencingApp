@@ -16,9 +16,8 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using System.Runtime.CompilerServices;
 
-namespace streamServer
+namespace streamClient
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
@@ -30,27 +29,85 @@ namespace streamServer
             InitializeComponent();
             Loaded += MainWindow_Loaded;
         }
-        static UdpClient me = new UdpClient(5002);
-        static IPEndPoint client = new IPEndPoint(IPAddress.Any, 0);
+        static int port = 5001;
+        static UdpClient me = new UdpClient(port);
+        static IPEndPoint server = new IPEndPoint(IPAddress.Any, 0);
+        static string serverIP = null;
+        static int serverPort = 5002;
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             try
             {
-                byte[] data = me.Receive(ref client);
-                string message = Encoding.ASCII.GetString(data);
-                text.Text = message;
-                me.Connect(IPAddress.Parse(client.Address.ToString()),5001);
+                Connect();
+                Downstream();
+                Upstream();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+        }
+        private void Connect()
+        {
+            serverIP = "10.0.2.15";
+            while (true)
+            {
+                try
+                {
+                    me.Connect(IPAddress.Parse(serverIP), serverPort);
+                    text.Text += "Connected";
+                    string sendThis = "This is test";
+                    byte[] output = Encoding.ASCII.GetBytes(sendThis);
+                    me.Send(output, output.Length);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    Console.WriteLine("Attempting to reconnect in 2,5s");
+                }
+                Thread.Sleep(2500);
+            }
+        }
+        private void Host()
+        {
+            try
+            {
+                me.Receive(ref server);
+                serverIP = server.Address.ToString();
+                serverPort = Int32.Parse(server.Port.ToString())+1;
+                me.Connect(IPAddress.Parse(serverIP), serverPort);
                 text.Text += "Connected";
-                string sendThis = "This is test message";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+        }
+        private void Upstream()
+        {
+            try
+            {
+                string sendThis = "This is test";
                 byte[] output = Encoding.ASCII.GetBytes(sendThis);
                 me.Send(output, output.Length);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
-            }finally
+            }
+        }
+        private void Downstream()
+        {
+            try
             {
-                me.Close();
+                byte[] data = me.Receive(ref server);
+                string message = Encoding.ASCII.GetString(data);
+                text.Text = message;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
             }
         }
     }
