@@ -1,0 +1,24 @@
+﻿<Window x:Class="Stream.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Stream"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+    <DockPanel LastChildFill="False">
+        <TextBlock Name="text" DockPanel.Dock="Top">Chat:<LineBreak/></TextBlock>
+        <StackPanel DockPanel.Dock="Bottom">
+            <TextBlock Text="Message: "/>
+            <TextBox Name="message" Text=""/>
+            <Button Content="Send" Click="Upstream"/>
+            <Button Content="Receive" Click="Downstream"/>
+            <TextBlock Text="IP: "/>
+            <TextBox Name="ip" Text=""/>
+            <TextBlock Text="Port: "/>
+            <TextBox Name="port" Text="5001"/>
+            <Button Content="Host" Click="Host"/>
+            <Button Content="Connect" Click="Connect"/>
+        </StackPanel>
+    </DockPanel>
+</Window>
