@@ -29,11 +29,11 @@ namespace streamClient
             InitializeComponent();
             Loaded += MainWindow_Loaded;
         }
-        static int port = 5001;
+        static int port = 5002;
         static UdpClient me = new UdpClient(port);
         static IPEndPoint server = new IPEndPoint(IPAddress.Any, 0);
         static string serverIP = null;
-        static int serverPort = 5002;
+        static int serverPort = 5001;
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             try
@@ -49,16 +49,18 @@ namespace streamClient
         }
         private void Connect()
         {
-            serverIP = "10.0.2.15";
+            serverIP = "127.0.0.1";
+            me.Connect(IPAddress.Parse(serverIP), serverPort);
             while (true)
             {
                 try
                 {
-                    me.Connect(IPAddress.Parse(serverIP), serverPort);
-                    text.Text += "Connected";
                     string sendThis = "This is test";
                     byte[] output = Encoding.ASCII.GetBytes(sendThis);
                     me.Send(output, output.Length);
+                    me.Client.ReceiveTimeout = 2500;
+                    me.Receive(ref server);
+                    text.Text += "Connected";
                     break;
                 }
                 catch (Exception ex)
