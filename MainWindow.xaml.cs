@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -25,19 +25,20 @@ namespace Stream
         public MainWindow()
         {
             InitializeComponent();
+            DownstreamThread(null, null);
         }
         static int myPort = 5001;
         static UdpClient meUp = new UdpClient(myPort);
-        static UdpClient meDown = new UdpClient(myPort+1);
+        static UdpClient meDown = new UdpClient(myPort + 1);
         static IPEndPoint peer = new IPEndPoint(IPAddress.Any, 0);
         static string peerIP = null;
-        static int peerPort = 5001;
+        static int peerPort = 5003;
         private void Connect(object sender, RoutedEventArgs e)
         {
             peerIP = ip.Text;
             peerPort = Int32.Parse(port.Text);
             meDown.Connect(IPAddress.Parse(peerIP), peerPort);
-            meUp.Connect(IPAddress.Parse(peerIP), peerPort+1);
+            meUp.Connect(IPAddress.Parse(peerIP), peerPort + 1);
             while (true)
             {
                 try
@@ -69,7 +70,7 @@ namespace Stream
                 peerIP = peer.Address.ToString();
                 peerPort = Int32.Parse(peer.Port.ToString());
                 meDown.Connect(IPAddress.Parse(peerIP), peerPort);
-                meUp.Connect(IPAddress.Parse(peerIP), peerPort+1);
+                meUp.Connect(IPAddress.Parse(peerIP), peerPort + 1);
                 string sendThis = "\nconnected";
                 byte[] output = Encoding.ASCII.GetBytes(sendThis);
                 meUp.Send(output, output.Length);
@@ -100,12 +101,34 @@ namespace Stream
             {
                 byte[] data = meDown.Receive(ref peer);
                 string dataText = Encoding.ASCII.GetString(data);
-                text.Text += dataText+"\n";
+                text.Text += dataText + "\n";
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
             }
+        }
+        private void DownstreamThread(object sender, RoutedEventArgs e)
+        {
+            Task.Run(() =>
+            {
+                while (true)
+                {
+                    try
+                    {
+                        byte[] data = meDown.Receive(ref peer);
+                        string dataText = Encoding.ASCII.GetString(data);
+                        this.Dispatcher.Invoke(() =>
+                        {
+                            text.Text += dataText + "\n";
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex.Message);
+                    }
+                }
+            });
         }
     }
 }
