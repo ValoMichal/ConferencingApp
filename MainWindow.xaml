@@ -1,24 +1,32 @@
-﻿<Window x:Class="Stream.MainWindow"
+<Window x:Class="Stream.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Stream"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <DockPanel LastChildFill="False">
-        <TextBlock Name="text" DockPanel.Dock="Top">Chat:<LineBreak/></TextBlock>
-        <StackPanel DockPanel.Dock="Bottom">
-            <TextBlock Text="Message: "/>
-            <TextBox Name="message" Text=""/>
-            <Button Content="Send" Click="Upstream"/>
-            <Button Content="Receive" Click="Downstream"/>
-            <TextBlock Text="IP: "/>
-            <TextBox Name="ip" Text=""/>
-            <TextBlock Text="Port: "/>
-            <TextBox Name="port" Text="5001"/>
+        Title="MainWindow" Height="450" Width="800"
+        Closed="CamOff">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center">
             <Button Content="Host" Click="Host"/>
+            <TextBlock Text=" or IP:"/>
+            <TextBox Name="ip" Text="" MinWidth="100"/>
             <Button Content="Connect" Click="Connect"/>
+            <TextBlock Text=" | Switch:"/>
+            <Button Content="Cam" Click="SwitchCam"/>
+            <Button Content="Mic" Click="SwitchMic"/>
+            <TextBlock Text=" | Share:"/>
+            <Button Content="Cam" x:Name="Cam" Click="MuteCam"/>
+            <Button Content="Mic" x:Name="Mic" Click="MuteMic"/>
         </StackPanel>
-    </DockPanel>
+        <DockPanel DockPanel.Dock="Right" Width="200">
+            <DockPanel DockPanel.Dock="Bottom">
+                <Button Content="Send" Click="ChatUp" DockPanel.Dock="Right"/>
+                <TextBox Name="Msg" Text=""/>
+            </DockPanel>
+            <TextBlock Name="Chat" DockPanel.Dock="Top" Text=""></TextBlock>
+        </DockPanel>
+        <Image DockPanel.Dock="Left" x:Name="Display" Stretch="Uniform" Source="C:\Users\miso\source\repos\Stream\preview.png"/>
+        </DockPanel>
 </Window>
