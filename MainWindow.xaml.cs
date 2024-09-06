@@ -32,14 +32,14 @@ using Accord.Collections;
 using System.Runtime.CompilerServices;
 using System.Printing.IndexedProperties;
 using System.Windows.Interop;
+using NAudio.Wave;
+using System.Diagnostics.Tracing;
 
 namespace Stream
 {
     public partial class MainWindow : Window
     {
-        //
         static int chunkSize = 65000;
-        //
         static int myPort = 5000;
         static UdpClient meUp = new UdpClient(myPort + 1);
         static UdpClient meDown = new UdpClient(myPort);
@@ -50,14 +50,22 @@ namespace Stream
         private VideoCaptureDevice videoSource;
         private int camNum = 0;
         private int micNum = 0;
-        private bool camMute = true;
-        private bool micMute = true;
+        private static bool camMute = true;
+        private static bool micMute = true;
         private int id = 0;
         private List<string> users = new List<string>();
+        private static WaveInEvent waveIn;
+        private static WaveOutEvent waveOut;
+        private static BufferedWaveProvider waveProvider;
+        UdpClient portChatUp = new UdpClient(5002);
+        UdpClient portChatDown = new UdpClient(5003);
+        UdpClient portAudioUp = new UdpClient(5004);
+        UdpClient portAudioDown = new UdpClient(5005);
+        UdpClient portVideoUp = new UdpClient(5006);
+        UdpClient portVideoDown = new UdpClient(5007);
         public MainWindow()
         {
             InitializeComponent();
-            //ChatDown(null, null);
             videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
             try
             {
@@ -79,11 +87,22 @@ namespace Stream
             {
                 camNum = 0;
             }
+            ((Button)sender).ToolTip = videoDevices[camNum].Name;
             CamOff(null, null);
             InitializeCamera();
         }
         private void SwitchMic(object sender, EventArgs e)
         {
+            if (micNum < WaveInEvent.DeviceCount - 1)
+            {
+                micNum++;
+            }
+            else
+            {
+                micNum = 0;
+            }
+            ((Button)sender).ToolTip = WaveInEvent.GetCapabilities(micNum).ProductName;
+            AudioUp(null, null);
         }
         private void MuteCam(object sender, EventArgs e)
         {
@@ -133,8 +152,22 @@ namespace Stream
         {
             if (id == 0 && users.Count == 0)
             {
-                using (Bitmap newFrame = (Bitmap)eventArgs.Frame.Clone())
+                if (camMute)
                 {
+                    Bitmap newFrame = new Bitmap(1920, 1080);
+                    using (Graphics graph = Graphics.FromImage(newFrame))
+                    {
+                        Rectangle ImageSize = new Rectangle(0, 0, 1920, 1080);
+                        graph.FillRectangle(System.Drawing.Brushes.Black, ImageSize);
+                    }
+                    this.Dispatcher.Invoke(() =>
+                    {
+                        Display.Source = Utils.BitmapToImageSource(newFrame);
+                    });
+                }
+                else
+                {
+                    Bitmap newFrame = (Bitmap)eventArgs.Frame.Clone();
                     this.Dispatcher.Invoke(() =>
                     {
                         Display.Source = Utils.BitmapToImageSource(newFrame);
@@ -143,32 +176,8 @@ namespace Stream
             }
             else
             {
-                using (MemoryStream ms = new MemoryStream())
-                {
-                    eventArgs.Frame.Save(ms, ImageFormat.Jpeg);
-                    byte[] buffer = ms.ToArray();
-                    //
-                    int totalChunks = (buffer.Length + chunkSize - 1) / chunkSize;
-                    for (int i = 0; i < totalChunks; i++)
-                    {
-                        int currentChunkSize = Math.Min(chunkSize, buffer.Length - i * chunkSize);
-                        byte[] chunk = new byte[currentChunkSize + 4];
-                        BitConverter.GetBytes(i).CopyTo(chunk, 0);
-                        Array.Copy(buffer, i * chunkSize, chunk, 4, currentChunkSize);
-
-                        //
-                        try
-                        {
-                            meUp.Send(chunk, chunk.Length);
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine(ex.Message);
-                        }
-                        //
-                    }
-                    //
-                }
+                VideoUp(sender, eventArgs);
+                AudioUp(null,null);
             }
         }
         internal static class Utils
@@ -217,9 +226,10 @@ namespace Stream
                         meDown.Client.ReceiveTimeout = 2500;
                         byte[] data = meDown.Receive(ref peer);
                         string dataText = Encoding.ASCII.GetString(data);
+                        id = int.Parse(dataText);
                         this.Dispatcher.Invoke(() =>
                         {
-                            Chat.Text += dataText + "\n";
+                            ChatAdd(sender, e, dataText);
                         });
                         break;
                     }
@@ -230,8 +240,9 @@ namespace Stream
                         Thread.Sleep(2500);
                     }
                 }
-                id = 1;
                 VideoDown(null, null);
+                AudioDown(null, null);
+                ChatDown(null, null);
             });
         }
         private void Host(object sender, RoutedEventArgs e)
@@ -244,17 +255,19 @@ namespace Stream
                     string dataText = Encoding.ASCII.GetString(data);
                     this.Dispatcher.Invoke(() =>
                     {
-                        Chat.Text += dataText + "\n";
+                        ChatAdd(sender, e, dataText);
                     });
                     peerIP = peer.Address.ToString();
                     //peerPort = Int32.Parse(peer.Port.ToString());
                     meDown.Connect(IPAddress.Parse(peerIP), peerPort + 1);
                     meUp.Connect(IPAddress.Parse(peerIP), peerPort);
-                    string sendThis = "\nconnected";
+                    users.Add(peerIP);
+                    string sendThis = users.Count.ToString();
                     byte[] output = Encoding.ASCII.GetBytes(sendThis);
                     meUp.Send(output, output.Length);
-                    users.Add(peerIP);
                     VideoDown(null, null);
+                    AudioDown(null, null);
+                    ChatDown(null, null);
                 }
                 catch (Exception ex)
                 {
@@ -262,15 +275,34 @@ namespace Stream
                 }
             });
         }
+        private void checkEnter(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter|| e.Key == System.Windows.Input.Key.Return)
+            {
+                ChatUp(null, null);
+                e.Handled = true;
+            }
+        }
+        private void ChatAdd(object sender, RoutedEventArgs e, String msg)
+        {
+            TextBlock newTextBlock = new TextBlock();
+            newTextBlock.Text = msg;
+            Chat.Children.Insert(Chat.Children.Count, newTextBlock);
+            if (Chat.Children.Count > 25)
+            {
+                Chat.Children.RemoveAt(0);
+            }
+            scrollViewer.ScrollToEnd();
+        }
         private void ChatUp(object sender, RoutedEventArgs e)
         {
             try
             {
                 string sendThis = Msg.Text;
-                Chat.Text += Msg.Text + "\n";
+                ChatAdd(sender, e, Msg.Text);
                 Msg.Text = "";
                 byte[] output = Encoding.ASCII.GetBytes(sendThis);
-                meUp.Send(output, output.Length);
+                portChatUp.Send(output, output.Length, peerIP, 5003);
             }
             catch (Exception ex)
             {
@@ -285,11 +317,11 @@ namespace Stream
                 {
                     try
                     {
-                        byte[] data = meDown.Receive(ref peer);
+                        byte[] data = portChatDown.Receive(ref peer);
                         string dataText = Encoding.ASCII.GetString(data);
                         this.Dispatcher.Invoke(() =>
                         {
-                            Chat.Text += dataText + "\n";
+                            ChatAdd(sender, e, dataText);
                         });
                     }
                     catch (Exception ex)
@@ -299,45 +331,99 @@ namespace Stream
                 }
             });
         }
-        private void VideoUp(object sender, RoutedEventArgs e)
+        private void AudioUp(object sender, RoutedEventArgs e)
         {
-            Task.Run(() =>
+            if (waveIn != null)
             {
-                while (true)
+                waveIn.Dispose();
+            }
+            waveIn = new WaveInEvent
+            {
+                DeviceNumber = micNum,
+                WaveFormat = new WaveFormat(44100, 16, 1)
+            };
+            waveIn.DataAvailable += (sender, e) => WaveIn_DataAvailable(sender, e, portAudioUp);
+            waveIn.StartRecording();
+
+        }
+        private static void WaveIn_DataAvailable(object sender, WaveInEventArgs e, UdpClient port)
+        {
+            if (!micMute)
+            {
+                port.Send(e.Buffer, e.BytesRecorded, peerIP, 5005);
+            }
+        }
+        private void AudioDown(object sender, RoutedEventArgs e)
+        {
+            waveProvider = new BufferedWaveProvider(new WaveFormat(44100, 16, 1));
+            waveOut = new WaveOutEvent();
+            waveOut.Init(waveProvider);
+            waveOut.Play();
+            StartReceiving(portAudioDown);
+        }
+        private static void StartReceiving(UdpClient port)
+        {
+            port.BeginReceive((ar)=>OnDataReceived(ar, port), null);
+        }
+        private static void OnDataReceived(IAsyncResult ar, UdpClient port)
+        {
+            byte[] receivedBytes = port.EndReceive(ar, ref peer);
+            waveProvider.AddSamples(receivedBytes, 0, receivedBytes.Length);
+            StartReceiving(port);
+        }
+        private void VideoUp(object sender, AForge.Video.NewFrameEventArgs eventArgs)
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                if (camMute)
                 {
+                    Bitmap bmp = new Bitmap(1920, 1080);
+                    using (Graphics graph = Graphics.FromImage(bmp))
+                    {
+                        Rectangle ImageSize = new Rectangle(0, 0, 1920, 1080);
+                        graph.FillRectangle(System.Drawing.Brushes.Black, ImageSize);
+                    }
+                    bmp.Save(ms, ImageFormat.Jpeg);
+                }
+                else
+                {
+                    eventArgs.Frame.Save(ms, ImageFormat.Jpeg);
+                }
+                byte[] buffer = ms.ToArray();
+                int totalChunks = (buffer.Length + chunkSize - 1) / chunkSize;
+                for (int i = 0; i < totalChunks; i++)
+                {
+                    int currentChunkSize = Math.Min(chunkSize, buffer.Length - i * chunkSize);
+                    byte[] chunk = new byte[currentChunkSize + 4];
+                    BitConverter.GetBytes(i).CopyTo(chunk, 0);
+                    Array.Copy(buffer, i * chunkSize, chunk, 4, currentChunkSize);
                     try
                     {
-                        MemoryStream stream = new MemoryStream();
-                        //bitmap.Save(stream, ImageFormat.Jpeg);
-                        byte[] output = stream.ToArray();
-                        meUp.Send(output, output.Length);
+                        portVideoUp.Send(chunk, chunk.Length, peerIP, 5007);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine(ex.Message);
+                        Debug.WriteLine(ex.Message);
                     }
                 }
-            });
+            }
         }
         private void VideoDown(object sender, RoutedEventArgs e)
         {
             Task.Run(() =>
             {
-                //
                 Dictionary<int, byte[]> receivedChunks = new Dictionary<int, byte[]>();
                 try
                 {
-                    byte[] data = meDown.Receive(ref peer);
+                    byte[] data = portVideoDown.Receive(ref peer);
                     int chunkIndex = BitConverter.ToInt32(data, 0);
                     byte[] chunkData = new byte[data.Length - 4];
                     Array.Copy(data, 4, chunkData, 0, chunkData.Length);
                     receivedChunks[chunkIndex] = chunkData;
                     Debug.WriteLine($"receoved chunk {chunkIndex}");
-                    //
                     while (true)
                     {
-                        data = meDown.Receive(ref peer);
-                        //
+                        data = portVideoDown.Receive(ref peer);
                         chunkIndex = BitConverter.ToInt32(data, 0);
                         if (chunkIndex == 0)
                         {
@@ -353,19 +439,16 @@ namespace Stream
                                 Array.Copy(chunk.Value, 0, picture, lengthSum, chunk.Value.Length);
                                 lengthSum += chunk.Value.Length;
                             }
-                            //
                             Dispatcher.Invoke(() =>
                             {
-                                BitmapImage bitmapImage = ConvertToBitmapImage(picture);//chunkData instead data
+                                BitmapImage bitmapImage = ConvertToBitmapImage(picture);
                                 Display.Source = bitmapImage;
                             });
-                            //
                         }
                         chunkData = new byte[data.Length - 4];
                         Array.Copy(data, 4, chunkData, 0, chunkData.Length);
                         receivedChunks[chunkIndex] = chunkData;
-                        Debug.WriteLine($"receoved chunk {chunkIndex}");
-                        //
+                        Debug.WriteLine($"received chunk {chunkIndex}");
                     }
                 }
                 catch (Exception ex)
@@ -390,9 +473,7 @@ namespace Stream
 }
 //upstream will have foreach ip send video
 //show only loudest user or cycle through manually
-//i would like chat to go from bottom and oldest messages dissapear at top but thats not priority as chat wont be used for such long convos
 //connect by texting to port 5000 and receive your call id to determine port u gonna use
 //finish sending video, then start doing multiuser (prop just put everything in arrays), the clean up code
 //rewrite it so sockets are created inside threads. there will be host thread that will be creating upstream and downstream threads
-//when someone connects you save his ip and give him id
 //server shares the loudest user video and all audio and chat?
