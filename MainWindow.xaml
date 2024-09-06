@@ -23,9 +23,11 @@
         <DockPanel DockPanel.Dock="Right" Width="200">
             <DockPanel DockPanel.Dock="Bottom">
                 <Button Content="Send" Click="ChatUp" DockPanel.Dock="Right"/>
-                <TextBox Name="Msg" Text=""/>
+                <TextBox Name="Msg" KeyDown="checkEnter"/>
             </DockPanel>
-            <TextBlock Name="Chat" DockPanel.Dock="Top" Text=""></TextBlock>
+            <ScrollViewer VerticalScrollBarVisibility="Disabled" x:Name="scrollViewer">
+                <StackPanel x:Name="Chat" VerticalAlignment="Bottom"/>
+            </ScrollViewer>
         </DockPanel>
         <Image DockPanel.Dock="Left" x:Name="Display" Stretch="Uniform" Source="C:\Users\miso\source\repos\Stream\preview.png"/>
         </DockPanel>
