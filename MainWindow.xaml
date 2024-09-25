@@ -35,6 +35,6 @@
                 <StackPanel x:Name="Chat" VerticalAlignment="Bottom"/>
             </ScrollViewer>
         </DockPanel>
-        <Image DockPanel.Dock="Left" x:Name="Display" Stretch="Uniform" Source="C:\Users\miso\source\repos\Stream\preview.png"/>
-        </DockPanel>
+        <Image x:Name="Display" DockPanel.Dock="Left" Stretch="Uniform" Source="C:\Users\miso\source\repos\Stream\preview.png"/>
+    </DockPanel>
 </Window>
